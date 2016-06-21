@@ -16,6 +16,7 @@ type ActualLRPLifecycleHandler struct {
 	actualHub        events.Hub
 	auctioneerClient auctioneer.Client
 	retirer          ActualLRPRetirer
+	exitChan         chan<- struct{}
 	logger           lager.Logger
 }
 
@@ -26,6 +27,7 @@ func NewActualLRPLifecycleHandler(
 	actualHub events.Hub,
 	auctioneerClient auctioneer.Client,
 	retirer ActualLRPRetirer,
+	exitChan chan<- struct{},
 ) *ActualLRPLifecycleHandler {
 	return &ActualLRPLifecycleHandler{
 		db:               db,
@@ -33,6 +35,7 @@ func NewActualLRPLifecycleHandler(
 		actualHub:        actualHub,
 		auctioneerClient: auctioneerClient,
 		retirer:          retirer,
+		exitChan:         exitChan,
 		logger:           logger.Session("actual-lrp-handler"),
 	}
 }
@@ -52,6 +55,11 @@ func (h *ActualLRPLifecycleHandler) ClaimActualLRP(w http.ResponseWriter, req *h
 	}
 
 	before, after, err := h.db.ClaimActualLRP(logger, request.ProcessGuid, request.Index, request.ActualLrpInstanceKey)
+	if err == models.ErrNoTable {
+		logger.Error("failed-actual-lrps-table-does-not-exist", err)
+		h.exitChan <- struct{}{}
+	}
+
 	if err != nil {
 		response.Error = models.ConvertError(err)
 		return
@@ -79,6 +87,10 @@ func (h *ActualLRPLifecycleHandler) StartActualLRP(w http.ResponseWriter, req *h
 	}
 
 	before, after, err := h.db.StartActualLRP(logger, request.ActualLrpKey, request.ActualLrpInstanceKey, request.ActualLrpNetInfo)
+	if err == models.ErrNoTable {
+		logger.Error("failed-actual-lrps-table-does-not-exist", err)
+		h.exitChan <- struct{}{}
+	}
 	if err != nil {
 		response.Error = models.ConvertError(err)
 		return
@@ -108,6 +120,10 @@ func (h *ActualLRPLifecycleHandler) CrashActualLRP(w http.ResponseWriter, req *h
 	actualLRPInstanceKey := request.ActualLrpInstanceKey
 
 	before, after, shouldRestart, err := h.db.CrashActualLRP(logger, actualLRPKey, actualLRPInstanceKey, request.ErrorMessage)
+	if err == models.ErrNoTable {
+		logger.Error("failed-actual-lrps-table-does-not-exist", err)
+		h.exitChan <- struct{}{}
+	}
 	if err != nil {
 		response.Error = models.ConvertError(err)
 		return
@@ -117,6 +133,10 @@ func (h *ActualLRPLifecycleHandler) CrashActualLRP(w http.ResponseWriter, req *h
 		desiredLRP, err := h.desiredLRPDB.DesiredLRPByProcessGuid(logger, actualLRPKey.ProcessGuid)
 		if err != nil {
 			logger.Error("failed-fetching-desired-lrp", err)
+	if err == models.ErrNoTable {
+		logger.Error("failed-desired-lrps-table-does-not-exist", err)
+		h.exitChan <- struct{}{}
+	}
 			response.Error = models.ConvertError(err)
 			return
 		}
@@ -152,6 +172,10 @@ func (h *ActualLRPLifecycleHandler) FailActualLRP(w http.ResponseWriter, req *ht
 	}
 
 	before, after, err := h.db.FailActualLRP(logger, request.ActualLrpKey, request.ErrorMessage)
+	if err == models.ErrNoTable {
+		logger.Error("failed-actual-lrps-table-does-not-exist", err)
+		h.exitChan <- struct{}{}
+	}
 	if err != nil {
 		response.Error = models.ConvertError(err)
 		return
@@ -176,12 +200,20 @@ func (h *ActualLRPLifecycleHandler) RemoveActualLRP(w http.ResponseWriter, req *
 	}
 
 	beforeActualLRPGroup, err := h.db.ActualLRPGroupByProcessGuidAndIndex(logger, request.ProcessGuid, request.Index)
+	if err == models.ErrNoTable {
+		logger.Error("failed-actual-lrps-table-does-not-exist", err)
+		h.exitChan <- struct{}{}
+	}
 	if err != nil {
 		response.Error = models.ConvertError(err)
 		return
 	}
 
 	err = h.db.RemoveActualLRP(logger, request.ProcessGuid, request.Index, request.ActualLrpInstanceKey)
+	if err == models.ErrNoTable {
+		logger.Error("failed-actual-lrps-table-does-not-exist", err)
+		h.exitChan <- struct{}{}
+	}
 	if err != nil {
 		response.Error = models.ConvertError(err)
 		return
@@ -205,5 +237,10 @@ func (h *ActualLRPLifecycleHandler) RetireActualLRP(w http.ResponseWriter, req *
 	}
 
 	err = h.retirer.RetireActualLRP(logger, request.ActualLrpKey.ProcessGuid, request.ActualLrpKey.Index)
+	if err == models.ErrNoTable {
+		logger.Error("failed-actual-lrps-table-does-not-exist", err)
+		h.exitChan <- struct{}{}
+	}
+
 	response.Error = models.ConvertError(err)
 }

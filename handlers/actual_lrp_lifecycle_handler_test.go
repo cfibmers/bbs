@@ -15,18 +15,20 @@ import (
 	"github.com/cloudfoundry-incubator/rep/repfakes"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"github.com/pivotal-golang/lager"
+	"github.com/onsi/gomega/gbytes"
+	"github.com/pivotal-golang/lager/lagertest"
 )
 
 var _ = Describe("ActualLRP Lifecycle Handlers", func() {
 	var (
-		logger               lager.Logger
+		logger               *lagertest.TestLogger
 		fakeActualLRPDB      *dbfakes.FakeActualLRPDB
 		fakeDesiredLRPDB     *dbfakes.FakeDesiredLRPDB
 		fakeAuctioneerClient *auctioneerfakes.FakeClient
 		actualHub            *eventfakes.FakeHub
 		responseRecorder     *httptest.ResponseRecorder
 		handler              *handlers.ActualLRPLifecycleHandler
+		exitCh               chan struct{}
 
 		actualLRP      models.ActualLRP
 		afterActualLRP models.ActualLRP
@@ -40,8 +42,7 @@ var _ = Describe("ActualLRP Lifecycle Handlers", func() {
 		fakeActualLRPDB = new(dbfakes.FakeActualLRPDB)
 		fakeAuctioneerClient = new(auctioneerfakes.FakeClient)
 		fakeDesiredLRPDB = new(dbfakes.FakeDesiredLRPDB)
-		logger = lager.NewLogger("test")
-		logger.RegisterSink(lager.NewWriterSink(GinkgoWriter, lager.DEBUG))
+		logger = lagertest.NewTestLogger("test")
 		responseRecorder = httptest.NewRecorder()
 
 		fakeServiceClient = new(fake_bbs.FakeServiceClient)
@@ -51,7 +52,8 @@ var _ = Describe("ActualLRP Lifecycle Handlers", func() {
 
 		actualHub = &eventfakes.FakeHub{}
 		retirer := handlers.NewActualLRPRetirer(fakeActualLRPDB, actualHub, fakeRepClientFactory, fakeServiceClient)
-		handler = handlers.NewActualLRPLifecycleHandler(logger, fakeActualLRPDB, fakeDesiredLRPDB, actualHub, fakeAuctioneerClient, retirer)
+		exitCh = make(chan struct{}, 1)
+		handler = handlers.NewActualLRPLifecycleHandler(logger, fakeActualLRPDB, fakeDesiredLRPDB, actualHub, fakeAuctioneerClient, retirer, exitCh)
 	})
 
 	Describe("ClaimActualLRP", func() {
@@ -141,6 +143,17 @@ var _ = Describe("ActualLRP Lifecycle Handlers", func() {
 				It("does not emit a change event to the hub", func() {
 					Eventually(actualHub.EmitCallCount).Should(Equal(0))
 				})
+			})
+		})
+
+		Context("when the DB has no actual_lrps table", func() {
+			BeforeEach(func() {
+				fakeActualLRPDB.ClaimActualLRPReturns(nil, nil, models.ErrNoTable)
+			})
+
+			It("logs and writes the exit channel", func() {
+				Eventually(logger).Should(gbytes.Say("failed-actual-lrps-table-does-not-exist"))
+				Eventually(exitCh).Should(Receive())
 			})
 		})
 
@@ -287,6 +300,17 @@ var _ = Describe("ActualLRP Lifecycle Handlers", func() {
 				It("does not emit a change event to the hub", func() {
 					Consistently(actualHub.EmitCallCount).Should(Equal(0))
 				})
+			})
+		})
+
+		Context("when the DB has no actual_lrps table", func() {
+			BeforeEach(func() {
+				fakeActualLRPDB.StartActualLRPReturns(nil, nil, models.ErrNoTable)
+			})
+
+			It("logs and writes the exit channel", func() {
+				Eventually(logger).Should(gbytes.Say("failed-actual-lrps-table-does-not-exist"))
+				Eventually(exitCh).Should(Receive())
 			})
 		})
 
@@ -480,6 +504,17 @@ var _ = Describe("ActualLRP Lifecycle Handlers", func() {
 					})
 				})
 
+				Context("when fetching the desired lrp fails because there is no desired_lrps table", func() {
+					BeforeEach(func() {
+						fakeDesiredLRPDB.DesiredLRPByProcessGuidReturns(nil, models.ErrNoTable)
+					})
+
+					It("logs and writes the exit channel", func() {
+						Eventually(logger).Should(gbytes.Say("failed-desired-lrps-table-does-not-exist"))
+						Eventually(exitCh).Should(Receive())
+					})
+				})
+				
 				Context("when fetching the desired lrp fails", func() {
 					BeforeEach(func() {
 						fakeDesiredLRPDB.DesiredLRPByProcessGuidReturns(nil, errors.New("error occured"))
@@ -509,6 +544,17 @@ var _ = Describe("ActualLRP Lifecycle Handlers", func() {
 						Expect(response.Error.Error()).To(Equal("some else bid higher"))
 					})
 				})
+			})
+		})
+
+		Context("when the DB has no actual_lrps table", func() {
+			BeforeEach(func() {
+				fakeActualLRPDB.CrashActualLRPReturns(nil, nil, false, models.ErrNoTable)
+			})
+
+			It("logs and writes the exit channel", func() {
+				Eventually(logger).Should(gbytes.Say("failed-actual-lrps-table-does-not-exist"))
+				Eventually(exitCh).Should(Receive())
 			})
 		})
 
@@ -594,6 +640,17 @@ var _ = Describe("ActualLRP Lifecycle Handlers", func() {
 			response = &models.ActualLRPLifecycleResponse{}
 			err := response.Unmarshal(responseRecorder.Body.Bytes())
 			Expect(err).NotTo(HaveOccurred())
+		})
+
+		Context("when the DB has no actual_lrps table", func() {
+			BeforeEach(func() {
+				fakeActualLRPDB.ActualLRPGroupByProcessGuidAndIndexReturns(nil, models.ErrNoTable)
+			})
+
+			It("logs and writes the exit channel", func() {
+				Eventually(logger).Should(gbytes.Say("failed-actual-lrps-table-does-not-exist"))
+				Eventually(exitCh).Should(Receive())
+			})
 		})
 
 		Context("when finding the actualLRP fails", func() {
@@ -915,6 +972,17 @@ var _ = Describe("ActualLRP Lifecycle Handlers", func() {
 			})
 		})
 
+		Context("when the DB has no actual_lrps table", func() {
+			BeforeEach(func() {
+				fakeActualLRPDB.FailActualLRPReturns(nil, nil, models.ErrNoTable)
+			})
+
+			It("logs and writes the exit channel", func() {
+				Eventually(logger).Should(gbytes.Say("failed-actual-lrps-table-does-not-exist"))
+				Eventually(exitCh).Should(Receive())
+			})
+		})
+
 		Context("when failing the actual lrp fails", func() {
 			BeforeEach(func() {
 				fakeActualLRPDB.FailActualLRPReturns(nil, nil, models.ErrUnknownError)
@@ -1027,6 +1095,28 @@ var _ = Describe("ActualLRP Lifecycle Handlers", func() {
 				removedEvent, ok := event.(*models.ActualLRPRemovedEvent)
 				Expect(ok).To(BeTrue())
 				Expect(removedEvent.ActualLrpGroup).To(Equal(&models.ActualLRPGroup{Instance: &actualLRP}))
+			})
+		})
+
+		Context("when the actual LRP lookup fails because there is no actual_lrps table", func() {
+			BeforeEach(func() {
+				fakeActualLRPDB.ActualLRPGroupByProcessGuidAndIndexReturns(nil, models.ErrNoTable)
+			})
+
+			It("logs and writes the exit channel", func() {
+				Eventually(logger).Should(gbytes.Say("failed-actual-lrps-table-does-not-exist"))
+				Eventually(exitCh).Should(Receive())
+			})
+		})
+
+		Context("when the actual LRP removal fails because there is no actual_lrps table", func() {
+			BeforeEach(func() {
+				fakeActualLRPDB.RemoveActualLRPReturns(models.ErrNoTable)
+			})
+
+			It("logs and writes the exit channel", func() {
+				Eventually(logger).Should(gbytes.Say("failed-actual-lrps-table-does-not-exist"))
+				Eventually(exitCh).Should(Receive())
 			})
 		})
 

@@ -135,6 +135,10 @@ var (
 		Type:    Error_GUIDGeneration,
 		Message: "cannot generate random guid",
 	}
+	ErrNoTable = &Error{
+		Type:    Error_NoTable,
+		Message: "SQL table missing",
+	}
 )
 
 type ErrInvalidField struct {
