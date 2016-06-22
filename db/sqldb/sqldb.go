@@ -135,7 +135,7 @@ func (db *SQLDB) convertMySQLError(err *mysql.MySQLError) *models.Error {
 	case 1406:
 		return models.ErrBadRequest
 	case 1146:
-		return models.ErrNoTables
+		return models.ErrNoTable
 	default:
 		return models.ErrUnknownError
 	}
@@ -150,7 +150,7 @@ func (db *SQLDB) convertPostgresError(err *pq.Error) *models.Error {
 	case "23505":
 		return models.ErrResourceExists
 	case "42P01":
-		return models.ErrNoTables
+		return models.ErrNoTable
 	default:
 		return models.ErrUnknownError
 	}

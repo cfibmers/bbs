@@ -31,6 +31,7 @@ var _ = Describe("DesiredLRP Handlers", func() {
 
 		responseRecorder *httptest.ResponseRecorder
 		handler          *handlers.DesiredLRPHandler
+		exitChan         chan struct{}
 
 		desiredLRP1 models.DesiredLRP
 		desiredLRP2 models.DesiredLRP
@@ -47,6 +48,7 @@ var _ = Describe("DesiredLRP Handlers", func() {
 		desiredHub = new(eventfakes.FakeHub)
 		actualHub = new(eventfakes.FakeHub)
 		Expect(err).NotTo(HaveOccurred())
+		exitChan = make(chan struct{}, 1)
 		handler = handlers.NewDesiredLRPHandler(
 			logger,
 			5,
@@ -57,6 +59,7 @@ var _ = Describe("DesiredLRP Handlers", func() {
 			fakeAuctioneerClient,
 			fakeRepClientFactory,
 			fakeServiceClient,
+			exitChan,
 		)
 	})
 

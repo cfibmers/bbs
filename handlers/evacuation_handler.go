@@ -18,6 +18,7 @@ type EvacuationHandler struct {
 	actualHub        events.Hub
 	auctioneerClient auctioneer.Client
 	logger           lager.Logger
+	exitChan         chan struct{}
 }
 
 func NewEvacuationHandler(
@@ -27,6 +28,7 @@ func NewEvacuationHandler(
 	desiredLRPDB db.DesiredLRPDB,
 	actualHub events.Hub,
 	auctioneerClient auctioneer.Client,
+	exitChan chan struct{},
 ) *EvacuationHandler {
 	return &EvacuationHandler{
 		db:               db,
@@ -35,6 +37,7 @@ func NewEvacuationHandler(
 		actualHub:        actualHub,
 		auctioneerClient: auctioneerClient,
 		logger:           logger.Session("evacuation-handler"),
+		exitChan:         exitChan,
 	}
 }
 
@@ -69,6 +72,10 @@ func (h *EvacuationHandler) RemoveEvacuatingActualLRP(w http.ResponseWriter, req
 
 	err = h.db.RemoveEvacuatingActualLRP(logger, request.ActualLrpKey, request.ActualLrpInstanceKey)
 	if err != nil {
+		if err == models.ErrNoTable {
+			logger.Error("failed-actual-lrps-table-does-not-exist", err)
+			h.exitChan <- struct{}{}
+		}
 		response.Error = models.ConvertError(err)
 		return
 	}
@@ -97,6 +104,10 @@ func (h *EvacuationHandler) EvacuateClaimedActualLRP(w http.ResponseWriter, req 
 	if err == nil {
 		err = h.db.RemoveEvacuatingActualLRP(logger, request.ActualLrpKey, request.ActualLrpInstanceKey)
 		if err != nil {
+			if err == models.ErrNoTable {
+				logger.Error("failed-actual-lrps-table-does-not-exist", err)
+				h.exitChan <- struct{}{}
+			}
 			logger.Error("failed-removing-evacuating-actual-lrp", err)
 		} else {
 			go h.actualHub.Emit(models.NewActualLRPRemovedEvent(beforeActualLRPGroup))
@@ -132,6 +143,10 @@ func (h *EvacuationHandler) EvacuateCrashedActualLRP(w http.ResponseWriter, req 
 	if err == nil {
 		err = h.db.RemoveEvacuatingActualLRP(logger, request.ActualLrpKey, request.ActualLrpInstanceKey)
 		if err != nil {
+			if err == models.ErrNoTable {
+				logger.Error("failed-actual-lrps-table-does-not-exist", err)
+				h.exitChan <- struct{}{}
+			}
 			logger.Error("failed-removing-evacuating-actual-lrp", err)
 		} else {
 			go h.actualHub.Emit(models.NewActualLRPRemovedEvent(beforeActualLRPGroup))
@@ -181,6 +196,10 @@ func (h *EvacuationHandler) EvacuateRunningActualLRP(w http.ResponseWriter, req 
 	if instance == nil {
 		err = h.db.RemoveEvacuatingActualLRP(logger, request.ActualLrpKey, request.ActualLrpInstanceKey)
 		if err != nil {
+			if err == models.ErrNoTable {
+				logger.Error("failed-actual-lrps-table-does-not-exist", err)
+				h.exitChan <- struct{}{}
+			}
 			if err == models.ErrActualLRPCannotBeRemoved {
 				logger.Debug("remove-evacuating-actual-lrp-failed")
 				response.KeepContainer = false
@@ -205,6 +224,10 @@ func (h *EvacuationHandler) EvacuateRunningActualLRP(w http.ResponseWriter, req 
 		}
 
 		group, err := h.db.EvacuateActualLRP(logger, request.ActualLrpKey, request.ActualLrpInstanceKey, request.ActualLrpNetInfo, request.Ttl)
+		if err == models.ErrNoTable {
+			logger.Error("failed-actual-lrps-table-does-not-exist", err)
+			h.exitChan <- struct{}{}
+		}
 		if err == models.ErrActualLRPCannotBeEvacuated {
 			logger.Error("cannot-evacuate-actual-lrp", err)
 			response.KeepContainer = false
@@ -228,6 +251,10 @@ func (h *EvacuationHandler) EvacuateRunningActualLRP(w http.ResponseWriter, req 
 		instance.State == models.ActualLRPStateCrashed {
 		response.KeepContainer = false
 		err = h.db.RemoveEvacuatingActualLRP(logger, &evacuating.ActualLRPKey, &evacuating.ActualLRPInstanceKey)
+		if err == models.ErrNoTable {
+			logger.Error("failed-actual-lrps-table-does-not-exist", err)
+			h.exitChan <- struct{}{}
+		}
 		if err == nil {
 			go h.actualHub.Emit(models.NewActualLRPRemovedEvent(&models.ActualLRPGroup{Evacuating: evacuating}))
 		}
@@ -242,6 +269,10 @@ func (h *EvacuationHandler) EvacuateRunningActualLRP(w http.ResponseWriter, req 
 		instance.ActualLRPInstanceKey.Equal(request.ActualLrpInstanceKey) {
 		group, err := h.db.EvacuateActualLRP(logger, request.ActualLrpKey, request.ActualLrpInstanceKey, request.ActualLrpNetInfo, request.Ttl)
 		if err != nil {
+			if err == models.ErrNoTable {
+				logger.Error("failed-actual-lrps-table-does-not-exist", err)
+				h.exitChan <- struct{}{}
+			}
 			response.Error = models.ConvertError(err)
 			return
 		}
@@ -282,6 +313,10 @@ func (h *EvacuationHandler) EvacuateStoppedActualLRP(w http.ResponseWriter, req 
 
 	err = h.db.RemoveEvacuatingActualLRP(logger, request.ActualLrpKey, request.ActualLrpInstanceKey)
 	if err != nil {
+		if err == models.ErrNoTable {
+			logger.Error("failed-actual-lrps-table-does-not-exist", err)
+			h.exitChan <- struct{}{}
+		}
 		logger.Error("failed-removing-evacuating-actual-lrp", err)
 	} else if group.Evacuating != nil {
 		go h.actualHub.Emit(models.NewActualLRPRemovedEvent(&models.ActualLRPGroup{Evacuating: group.Evacuating}))

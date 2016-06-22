@@ -21,6 +21,7 @@ type LRPConvergenceHandler struct {
 	serviceClient          bbs.ServiceClient
 	retirer                ActualLRPRetirer
 	convergenceWorkersSize int
+	exitChan               chan struct{}
 }
 
 func NewLRPConvergenceHandler(
@@ -31,8 +32,9 @@ func NewLRPConvergenceHandler(
 	serviceClient bbs.ServiceClient,
 	retirer ActualLRPRetirer,
 	convergenceWorkersSize int,
+	exitChan chan struct{},
 ) *LRPConvergenceHandler {
-	return &LRPConvergenceHandler{logger, db, actualHub, auctioneerClient, serviceClient, retirer, convergenceWorkersSize}
+	return &LRPConvergenceHandler{logger, db, actualHub, auctioneerClient, serviceClient, retirer, convergenceWorkersSize, exitChan}
 }
 
 func (h *LRPConvergenceHandler) ConvergeLRPs(w http.ResponseWriter, req *http.Request) {
@@ -50,6 +52,10 @@ func (h *LRPConvergenceHandler) ConvergeLRPs(w http.ResponseWriter, req *http.Re
 	logger.Debug("succeeded-listing-cells")
 
 	startRequests, keysWithMissingCells, keysToRetire := h.db.ConvergeLRPs(logger, cellSet)
+	if err == models.ErrNoTable {
+		logger.Error("failed-table-does-not-exist", err)
+		h.exitChan <- struct{}{}
+	}
 
 	retireLogger := logger.WithData(lager.Data{"retiring-lrp-count": len(keysToRetire)})
 	works := []func(){}
@@ -63,6 +69,10 @@ func (h *LRPConvergenceHandler) ConvergeLRPs(w http.ResponseWriter, req *http.Re
 		key := key
 		works = append(works, func() {
 			before, after, err := h.db.UnclaimActualLRP(logger, key.Key)
+			if err == models.ErrNoTable {
+				logger.Error("failed-actual-lrp-table-does-not-exist", err)
+				h.exitChan <- struct{}{}
+			}
 			if err == nil {
 				h.actualHub.Emit(models.NewActualLRPChangedEvent(before, after))
 				startRequest := auctioneer.NewLRPStartRequestFromSchedulingInfo(key.SchedulingInfo, int(key.Key.Index))

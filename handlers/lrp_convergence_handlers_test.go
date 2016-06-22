@@ -41,7 +41,8 @@ var _ = Describe("LRP Convergence Handlers", func() {
 		cellID  string
 		cellSet models.CellSet
 
-		handler *handlers.LRPConvergenceHandler
+		handler  *handlers.LRPConvergenceHandler
+		exitChan chan struct{}
 	)
 
 	BeforeEach(func() {
@@ -119,8 +120,9 @@ var _ = Describe("LRP Convergence Handlers", func() {
 		fakeServiceClient.CellsReturns(cellSet, nil)
 
 		actualHub = &eventfakes.FakeHub{}
+		exitChan = make(chan struct{}, 1)
 		retirer := handlers.NewActualLRPRetirer(fakeLRPDB, actualHub, fakeRepClientFactory, fakeServiceClient)
-		handler = handlers.NewLRPConvergenceHandler(logger, fakeLRPDB, actualHub, fakeAuctioneerClient, fakeServiceClient, retirer, 2)
+		handler = handlers.NewLRPConvergenceHandler(logger, fakeLRPDB, actualHub, fakeAuctioneerClient, fakeServiceClient, retirer, 2, exitChan)
 	})
 
 	JustBeforeEach(func() {

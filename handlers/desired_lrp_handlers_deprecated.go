@@ -22,6 +22,10 @@ func (h *DesiredLRPHandler) DesiredLRPs_r0(w http.ResponseWriter, req *http.Requ
 
 		filter := models.DesiredLRPFilter{Domain: request.Domain}
 		lrps, err = h.desiredLRPDB.DesiredLRPs(logger, filter)
+		if err == models.ErrNoTable {
+			logger.Error("failed-desired-lrps-table-does-not-exist", err)
+			h.exitChan <- struct{}{}
+		}
 		if err == nil {
 			for i := range lrps {
 				transformedLRP := lrps[i].VersionDownTo(format.V0)
@@ -47,6 +51,10 @@ func (h *DesiredLRPHandler) DesiredLRPs_r1(w http.ResponseWriter, req *http.Requ
 
 		filter := models.DesiredLRPFilter{Domain: request.Domain}
 		lrps, err = h.desiredLRPDB.DesiredLRPs(logger, filter)
+		if err == models.ErrNoTable {
+			logger.Error("failed-desired-lrps-table-does-not-exist", err)
+			h.exitChan <- struct{}{}
+		}
 		if err == nil {
 			for i := range lrps {
 				transformedLRP := lrps[i].VersionDownTo(format.V1)
@@ -70,6 +78,10 @@ func (h *DesiredLRPHandler) DesiredLRPByProcessGuid_r0(w http.ResponseWriter, re
 	if err == nil {
 		var lrp *models.DesiredLRP
 		lrp, err = h.desiredLRPDB.DesiredLRPByProcessGuid(logger, request.ProcessGuid)
+		if err == models.ErrNoTable {
+			logger.Error("failed-desired-lrps-table-does-not-exist", err)
+			h.exitChan <- struct{}{}
+		}
 		if err == nil {
 			transformedLRP := lrp.VersionDownTo(format.V0)
 			response.DesiredLrp = transformedLRP
@@ -91,6 +103,10 @@ func (h *DesiredLRPHandler) DesiredLRPByProcessGuid_r1(w http.ResponseWriter, re
 	if err == nil {
 		var lrp *models.DesiredLRP
 		lrp, err = h.desiredLRPDB.DesiredLRPByProcessGuid(logger, request.ProcessGuid)
+		if err == models.ErrNoTable {
+			logger.Error("failed-desired-lrps-table-does-not-exist", err)
+			h.exitChan <- struct{}{}
+		}
 		if err == nil {
 			transformedLRP := lrp.VersionDownTo(format.V1)
 			response.DesiredLrp = transformedLRP
@@ -116,6 +132,10 @@ func (h *DesiredLRPHandler) DesireDesiredLRP_r0(w http.ResponseWriter, req *http
 
 	err = h.desiredLRPDB.DesireLRP(logger, request.DesiredLrp)
 	if err != nil {
+		if err == models.ErrNoTable {
+			logger.Error("failed-desired-lrps-table-does-not-exist", err)
+			h.exitChan <- struct{}{}
+		}
 		response.Error = models.ConvertError(err)
 		return
 	}

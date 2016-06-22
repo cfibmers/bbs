@@ -30,6 +30,7 @@ var _ = Describe("Evacuation Handlers", func() {
 		fakeAuctioneerClient *auctioneerfakes.FakeClient
 		responseRecorder     *httptest.ResponseRecorder
 		handler              *handlers.EvacuationHandler
+		exitChan             chan struct{}
 	)
 
 	BeforeEach(func() {
@@ -41,7 +42,8 @@ var _ = Describe("Evacuation Handlers", func() {
 		logger = lagertest.NewTestLogger("test")
 		logger.RegisterSink(lager.NewWriterSink(GinkgoWriter, lager.DEBUG))
 		responseRecorder = httptest.NewRecorder()
-		handler = handlers.NewEvacuationHandler(logger, fakeEvacuationDB, fakeActualLRPDB, fakeDesiredLRPDB, actualHub, fakeAuctioneerClient)
+		exitChan = make(chan struct{}, 1)
+		handler = handlers.NewEvacuationHandler(logger, fakeEvacuationDB, fakeActualLRPDB, fakeDesiredLRPDB, actualHub, fakeAuctioneerClient, exitChan)
 	})
 
 	Describe("RemoveEvacuatingActualLRP", func() {

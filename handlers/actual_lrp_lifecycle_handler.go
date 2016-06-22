@@ -133,10 +133,10 @@ func (h *ActualLRPLifecycleHandler) CrashActualLRP(w http.ResponseWriter, req *h
 		desiredLRP, err := h.desiredLRPDB.DesiredLRPByProcessGuid(logger, actualLRPKey.ProcessGuid)
 		if err != nil {
 			logger.Error("failed-fetching-desired-lrp", err)
-	if err == models.ErrNoTable {
-		logger.Error("failed-desired-lrps-table-does-not-exist", err)
-		h.exitChan <- struct{}{}
-	}
+			if err == models.ErrNoTable {
+				logger.Error("failed-desired-lrps-table-does-not-exist", err)
+				h.exitChan <- struct{}{}
+			}
 			response.Error = models.ConvertError(err)
 			return
 		}

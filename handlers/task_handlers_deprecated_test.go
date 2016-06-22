@@ -25,6 +25,7 @@ var _ = Describe("Task Handlers", func() {
 		fakeTaskDB           *dbfakes.FakeTaskDB
 		fakeAuctioneerClient *auctioneerfakes.FakeClient
 		responseRecorder     *httptest.ResponseRecorder
+		exitChan             chan struct{}
 
 		handler *handlers.TaskHandler
 
@@ -40,7 +41,8 @@ var _ = Describe("Task Handlers", func() {
 		logger = lager.NewLogger("test")
 		logger.RegisterSink(lager.NewWriterSink(GinkgoWriter, lager.DEBUG))
 		responseRecorder = httptest.NewRecorder()
-		handler = handlers.NewTaskHandler(logger, fakeTaskDB, nil, fakeAuctioneerClient, fakeServiceClient, fakeRepClientFactory)
+		exitChan = make(chan struct{}, 1)
+		handler = handlers.NewTaskHandler(logger, fakeTaskDB, nil, fakeAuctioneerClient, fakeServiceClient, fakeRepClientFactory, exitChan)
 	})
 
 	Describe("Tasks_r0", func() {

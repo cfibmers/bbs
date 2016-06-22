@@ -378,7 +378,7 @@ func main() {
 	monitor := ifrit.Invoke(sigmon.New(group))
 	go func() {
 		<-exitChan
-		logger.Error("ERROR NO SQL TABLES!!!!!!", models.ErrNoTables)
+		logger.Error("missing-sql-tables-detected-trigger-exit", models.ErrNoTable)
 		monitor.Signal(os.Interrupt)
 	}()
 

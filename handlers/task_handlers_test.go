@@ -28,7 +28,8 @@ var _ = Describe("Task Handlers", func() {
 
 		responseRecorder *httptest.ResponseRecorder
 
-		handler *handlers.TaskHandler
+		handler  *handlers.TaskHandler
+		exitChan chan struct{}
 
 		requestBody interface{}
 
@@ -42,7 +43,8 @@ var _ = Describe("Task Handlers", func() {
 
 		logger = lagertest.NewTestLogger("test")
 		responseRecorder = httptest.NewRecorder()
-		handler = handlers.NewTaskHandler(logger, fakeTaskDB, fakeTaskCompletionClient, fakeAuctioneerClient, fakeServiceClient, fakeRepClientFactory)
+		exitChan = make(chan struct{}, 1)
+		handler = handlers.NewTaskHandler(logger, fakeTaskDB, fakeTaskCompletionClient, fakeAuctioneerClient, fakeServiceClient, fakeRepClientFactory, exitChan)
 	})
 
 	Describe("Tasks", func() {

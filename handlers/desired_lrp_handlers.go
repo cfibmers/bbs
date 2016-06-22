@@ -23,6 +23,7 @@ type DesiredLRPHandler struct {
 	serviceClient      bbs.ServiceClient
 	updateWorkersCount int
 	logger             lager.Logger
+	exitChan           chan struct{}
 }
 
 func NewDesiredLRPHandler(
@@ -35,6 +36,7 @@ func NewDesiredLRPHandler(
 	auctioneerClient auctioneer.Client,
 	repClientFactory rep.ClientFactory,
 	serviceClient bbs.ServiceClient,
+	exitChan chan struct{},
 ) *DesiredLRPHandler {
 	return &DesiredLRPHandler{
 		desiredLRPDB:       desiredLRPDB,
@@ -46,6 +48,7 @@ func NewDesiredLRPHandler(
 		serviceClient:      serviceClient,
 		updateWorkersCount: updateWorkersCount,
 		logger:             logger.Session("desired-lrp-handler"),
+		exitChan:           exitChan,
 	}
 }
 
@@ -60,6 +63,10 @@ func (h *DesiredLRPHandler) DesiredLRPs(w http.ResponseWriter, req *http.Request
 	if err == nil {
 		filter := models.DesiredLRPFilter{Domain: request.Domain}
 		response.DesiredLrps, err = h.desiredLRPDB.DesiredLRPs(logger, filter)
+		if err == models.ErrNoTable {
+			logger.Error("failed-desired-lrps-table-does-not-exist", err)
+			h.exitChan <- struct{}{}
+		}
 	}
 
 	response.Error = models.ConvertError(err)
@@ -76,6 +83,10 @@ func (h *DesiredLRPHandler) DesiredLRPByProcessGuid(w http.ResponseWriter, req *
 	err = parseRequest(logger, req, request)
 	if err == nil {
 		response.DesiredLrp, err = h.desiredLRPDB.DesiredLRPByProcessGuid(logger, request.ProcessGuid)
+		if err == models.ErrNoTable {
+			logger.Error("failed-desired-lrps-table-does-not-exist", err)
+			h.exitChan <- struct{}{}
+		}
 	}
 
 	response.Error = models.ConvertError(err)
@@ -93,6 +104,10 @@ func (h *DesiredLRPHandler) DesiredLRPSchedulingInfos(w http.ResponseWriter, req
 	if err == nil {
 		filter := models.DesiredLRPFilter{Domain: request.Domain}
 		response.DesiredLrpSchedulingInfos, err = h.desiredLRPDB.DesiredLRPSchedulingInfos(logger, filter)
+		if err == models.ErrNoTable {
+			logger.Error("failed-desired-lrps-table-does-not-exist", err)
+			h.exitChan <- struct{}{}
+		}
 	}
 
 	response.Error = models.ConvertError(err)
@@ -114,12 +129,20 @@ func (h *DesiredLRPHandler) DesireDesiredLRP(w http.ResponseWriter, req *http.Re
 
 	err = h.desiredLRPDB.DesireLRP(logger, request.DesiredLrp)
 	if err != nil {
+		if err == models.ErrNoTable {
+			logger.Error("failed-desired-lrps-table-does-not-exist", err)
+			h.exitChan <- struct{}{}
+		}
 		response.Error = models.ConvertError(err)
 		return
 	}
 
 	desiredLRP, err := h.desiredLRPDB.DesiredLRPByProcessGuid(logger, request.DesiredLrp.ProcessGuid)
 	if err != nil {
+		if err == models.ErrNoTable {
+			logger.Error("failed-desired-lrps-table-does-not-exist", err)
+			h.exitChan <- struct{}{}
+		}
 		response.Error = models.ConvertError(err)
 		return
 	}
@@ -149,6 +172,10 @@ func (h *DesiredLRPHandler) UpdateDesiredLRP(w http.ResponseWriter, req *http.Re
 	logger.Debug("updating-desired-lrp")
 	beforeDesiredLRP, err := h.desiredLRPDB.UpdateDesiredLRP(logger, request.ProcessGuid, request.Update)
 	if err != nil {
+		if err == models.ErrNoTable {
+			logger.Error("failed-desired-lrps-table-does-not-exist", err)
+			h.exitChan <- struct{}{}
+		}
 		logger.Debug("failed-updating-desired-lrp")
 		response.Error = models.ConvertError(err)
 		return
@@ -157,6 +184,10 @@ func (h *DesiredLRPHandler) UpdateDesiredLRP(w http.ResponseWriter, req *http.Re
 
 	desiredLRP, err := h.desiredLRPDB.DesiredLRPByProcessGuid(logger, request.ProcessGuid)
 	if err != nil {
+		if err == models.ErrNoTable {
+			logger.Error("failed-desired-lrps-table-does-not-exist", err)
+			h.exitChan <- struct{}{}
+		}
 		logger.Error("failed-fetching-desired-lrp", err)
 		return
 	}
@@ -199,12 +230,20 @@ func (h *DesiredLRPHandler) RemoveDesiredLRP(w http.ResponseWriter, req *http.Re
 
 	desiredLRP, err := h.desiredLRPDB.DesiredLRPByProcessGuid(logger, request.ProcessGuid)
 	if err != nil {
+		if err == models.ErrNoTable {
+			logger.Error("failed-desired-lrps-table-does-not-exist", err)
+			h.exitChan <- struct{}{}
+		}
 		response.Error = models.ConvertError(err)
 		return
 	}
 
 	err = h.desiredLRPDB.RemoveDesiredLRP(logger, request.ProcessGuid)
 	if err != nil {
+		if err == models.ErrNoTable {
+			logger.Error("failed-desired-lrps-table-does-not-exist", err)
+			h.exitChan <- struct{}{}
+		}
 		response.Error = models.ConvertError(err)
 		return
 	}
@@ -247,6 +286,10 @@ func (h *DesiredLRPHandler) createUnclaimedActualLRPs(logger lager.Logger, keys 
 		works[i] = func() {
 			actualLRPGroup, err := h.actualLRPDB.CreateUnclaimedActualLRP(logger, key)
 			if err != nil {
+				if err == models.ErrNoTable {
+					logger.Error("failed-actual-lrps-table-does-not-exist", err)
+					h.exitChan <- struct{}{}
+				}
 				logger.Info("failed-creating-actual-lrp", lager.Data{"actual_lrp_key": key, "err-message": err.Error()})
 			} else {
 				go h.actualHub.Emit(models.NewActualLRPCreatedEvent(actualLRPGroup))
@@ -292,6 +335,10 @@ func (h *DesiredLRPHandler) stopInstancesFrom(logger lager.Logger, processGuid s
 				case models.ActualLRPStateUnclaimed, models.ActualLRPStateCrashed:
 					err = h.actualLRPDB.RemoveActualLRP(logger, lrp.ProcessGuid, lrp.Index, &lrp.ActualLRPInstanceKey)
 					if err != nil {
+						if err == models.ErrNoTable {
+							logger.Error("failed-actual-lrps-table-does-not-exist", err)
+							h.exitChan <- struct{}{}
+						}
 						logger.Error("failed-removing-lrp-instance", err)
 					}
 				default:

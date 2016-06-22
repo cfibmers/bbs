@@ -51,8 +51,8 @@ var _ = Describe("ActualLRP Lifecycle Handlers", func() {
 		fakeRepClientFactory.CreateClientReturns(fakeRepClient)
 
 		actualHub = &eventfakes.FakeHub{}
-		retirer := handlers.NewActualLRPRetirer(fakeActualLRPDB, actualHub, fakeRepClientFactory, fakeServiceClient)
 		exitCh = make(chan struct{}, 1)
+		retirer := handlers.NewActualLRPRetirer(fakeActualLRPDB, actualHub, fakeRepClientFactory, fakeServiceClient)
 		handler = handlers.NewActualLRPLifecycleHandler(logger, fakeActualLRPDB, fakeDesiredLRPDB, actualHub, fakeAuctioneerClient, retirer, exitCh)
 	})
 
@@ -514,7 +514,7 @@ var _ = Describe("ActualLRP Lifecycle Handlers", func() {
 						Eventually(exitCh).Should(Receive())
 					})
 				})
-				
+
 				Context("when fetching the desired lrp fails", func() {
 					BeforeEach(func() {
 						fakeDesiredLRPDB.DesiredLRPByProcessGuidReturns(nil, errors.New("error occured"))

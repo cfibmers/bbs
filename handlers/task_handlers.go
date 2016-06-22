@@ -20,6 +20,7 @@ type TaskHandler struct {
 	auctioneerClient     auctioneer.Client
 	serviceClient        bbs.ServiceClient
 	repClientFactory     rep.ClientFactory
+	exitChan             chan struct{}
 }
 
 func NewTaskHandler(
@@ -29,6 +30,7 @@ func NewTaskHandler(
 	auctioneerClient auctioneer.Client,
 	serviceClient bbs.ServiceClient,
 	repClientFactory rep.ClientFactory,
+	exitChan chan struct{},
 ) *TaskHandler {
 	return &TaskHandler{
 		db:                   db,
@@ -37,6 +39,7 @@ func NewTaskHandler(
 		auctioneerClient:     auctioneerClient,
 		serviceClient:        serviceClient,
 		repClientFactory:     repClientFactory,
+		exitChan:             exitChan,
 	}
 }
 
@@ -51,6 +54,10 @@ func (h *TaskHandler) Tasks(w http.ResponseWriter, req *http.Request) {
 	if err == nil {
 		filter := models.TaskFilter{Domain: request.Domain, CellID: request.CellId}
 		response.Tasks, err = h.db.Tasks(logger, filter)
+		if err == models.ErrNoTable {
+			logger.Error("failed-task-table-does-not-exist", err)
+			h.exitChan <- struct{}{}
+		}
 	}
 
 	response.Error = models.ConvertError(err)
@@ -67,6 +74,10 @@ func (h *TaskHandler) TaskByGuid(w http.ResponseWriter, req *http.Request) {
 	err = parseRequest(logger, req, request)
 	if err == nil {
 		response.Task, err = h.db.TaskByGuid(logger, request.TaskGuid)
+		if err == models.ErrNoTable {
+			logger.Error("failed-task-table-does-not-exist", err)
+			h.exitChan <- struct{}{}
+		}
 	}
 
 	response.Error = models.ConvertError(err)
@@ -90,6 +101,10 @@ func (h *TaskHandler) DesireTask(w http.ResponseWriter, req *http.Request) {
 
 	err = h.db.DesireTask(logger, request.TaskDefinition, request.TaskGuid, request.Domain)
 	if err != nil {
+		if err == models.ErrNoTable {
+			logger.Error("failed-task-table-does-not-exist", err)
+			h.exitChan <- struct{}{}
+		}
 		response.Error = models.ConvertError(err)
 		return
 	}
@@ -115,6 +130,10 @@ func (h *TaskHandler) StartTask(w http.ResponseWriter, req *http.Request) {
 	if err == nil {
 		logger = logger.WithData(lager.Data{"task-guid": request.TaskGuid, "cell-id": request.CellId})
 		response.ShouldStart, err = h.db.StartTask(logger, request.TaskGuid, request.CellId)
+		if err == models.ErrNoTable {
+			logger.Error("failed-task-table-does-not-exist", err)
+			h.exitChan <- struct{}{}
+		}
 	}
 
 	response.Error = models.ConvertError(err)
@@ -137,6 +156,10 @@ func (h *TaskHandler) CancelTask(w http.ResponseWriter, req *http.Request) {
 
 	task, cellID, err := h.db.CancelTask(logger, request.TaskGuid)
 	if err != nil {
+		if err == models.ErrNoTable {
+			logger.Error("failed-task-table-does-not-exist", err)
+			h.exitChan <- struct{}{}
+		}
 		response.Error = models.ConvertError(err)
 		return
 	}
@@ -183,6 +206,10 @@ func (h *TaskHandler) FailTask(w http.ResponseWriter, req *http.Request) {
 
 	task, err := h.db.FailTask(logger, request.TaskGuid, request.FailureReason)
 	if err != nil {
+		if err == models.ErrNoTable {
+			logger.Error("failed-task-table-does-not-exist", err)
+			h.exitChan <- struct{}{}
+		}
 		response.Error = models.ConvertError(err)
 		return
 	}
@@ -210,6 +237,10 @@ func (h *TaskHandler) CompleteTask(w http.ResponseWriter, req *http.Request) {
 
 	task, err := h.db.CompleteTask(logger, request.TaskGuid, request.CellId, request.Failed, request.FailureReason, request.Result)
 	if err != nil {
+		if err == models.ErrNoTable {
+			logger.Error("failed-task-table-does-not-exist", err)
+			h.exitChan <- struct{}{}
+		}
 		response.Error = models.ConvertError(err)
 		return
 	}
@@ -230,6 +261,10 @@ func (h *TaskHandler) ResolvingTask(w http.ResponseWriter, req *http.Request) {
 	err = parseRequest(logger, req, request)
 	if err == nil {
 		err = h.db.ResolvingTask(logger, request.TaskGuid)
+		if err == models.ErrNoTable {
+			logger.Error("failed-task-table-does-not-exist", err)
+			h.exitChan <- struct{}{}
+		}
 	}
 
 	response.Error = models.ConvertError(err)
@@ -246,6 +281,10 @@ func (h *TaskHandler) DeleteTask(w http.ResponseWriter, req *http.Request) {
 	err = parseRequest(logger, req, request)
 	if err == nil {
 		err = h.db.DeleteTask(logger, request.TaskGuid)
+		if err == models.ErrNoTable {
+			logger.Error("failed-task-table-does-not-exist", err)
+			h.exitChan <- struct{}{}
+		}
 	}
 
 	response.Error = models.ConvertError(err)
