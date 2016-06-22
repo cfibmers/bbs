@@ -135,10 +135,6 @@ var (
 		Type:    Error_GUIDGeneration,
 		Message: "cannot generate random guid",
 	}
-	ErrNoTable = &Error{
-		Type:    Error_NoTable,
-		Message: "SQL table missing",
-	}
 )
 
 type ErrInvalidField struct {
@@ -170,5 +166,12 @@ func NewRunningOnDifferentCellError(expectedCellId, actualCellId string) *Error 
 	return &Error{
 		Type:    Error_RunningOnDifferentCell,
 		Message: fmt.Sprintf("Running on cell %s not %s", actualCellId, expectedCellId),
+	}
+}
+
+func NewUnrecoverableError(err error) *Error {
+	return &Error{
+		Type:    Error_Unrecoverable,
+		Message: fmt.Sprintf("Unrecoverable Error: %s", err.Error()),
 	}
 }

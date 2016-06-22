@@ -33,7 +33,7 @@ func (h *ActualLRPHandler) ActualLRPGroups(w http.ResponseWriter, req *http.Requ
 	if err == nil {
 		filter := models.ActualLRPFilter{Domain: request.Domain, CellID: request.CellId}
 		response.ActualLrpGroups, err = h.db.ActualLRPGroups(logger, filter)
-		if err == models.ErrNoTable {
+		if err == models.ErrUnrecoverable {
 			logger.Error("failed-actual-lrps-table-does-not-exist", err)
 			h.exitChan <- struct{}{}
 		}
